@@ -47,8 +47,11 @@ jobs:
           unzip -q OpenBullet2.zip
           rm OpenBullet2.zip
           
+          echo "Dando permisos de ejecución al binario nativo..."
+          chmod +x ./OpenBullet2.Web
+          
           echo "Iniciando OpenBullet 2 en segundo plano..."
-          nohup dotnet OpenBullet2.dll > ob2_console.log 2>&1 &
+          nohup ./OpenBullet2.Web > ob2_console.log 2>&1 &
           
           echo "OpenBullet 2 instalado e iniciado en el puerto 5000."
         shell: bash
