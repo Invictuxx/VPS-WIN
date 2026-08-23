@@ -1,0 +1,42 @@
+name: Entorno Windows con RDP (Bore)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Configurar contraseña de Windows
+        run: |
+          # Establecemos la contraseña para el usuario runneradmin
+          $Password = ConvertTo-SecureString "GithubRdp2026!" -AsPlainText -Force
+          Set-LocalUser -Name "runneradmin" -Password $Password
+        shell: powershell
+
+      - name: Habilitar Escritorio Remoto (RDP)
+        run: |
+          # Activar RDP en el registro de Windows
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -value 0
+          
+          # Habilitar la regla en el Firewall de Windows
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          
+          # Iniciar el servicio de Terminal Server
+          Set-Service -Name TermService -StartupType Automatic
+          Start-Service TermService
+        shell: powershell
+
+      - name: Descargar e iniciar Bore
+        run: |
+          Write-Host "Obteniendo la última versión de bore..."
+          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/ekzhang/bore/releases/latest"
+          $asset = $release.assets | Where-Object { $_.name -match "windows-msvc.zip" }
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "bore.zip"
+          Expand-Archive -Path "bore.zip" -DestinationPath "."
+          
+          Write-Host "Iniciando túnel en bore.pub para el puerto 3389 (RDP)..."
+          # Exponemos el puerto de Escritorio Remoto
+          .\bore.exe local 3389 --to bore.pub
+        shell: powershell
