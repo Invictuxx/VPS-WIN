@@ -35,7 +35,7 @@ jobs:
           
           echo "Descargando la última versión de OpenBullet 2..."
           # Usamos el redireccionamiento directo de GitHub (más seguro y sin límites de API)
-          wget -q --show-progress -L "https://github.com/openbullet/OpenBullet2/releases/latest/download/OpenBullet2.zip" -O OpenBullet2.zip
+          wget -q --show-progress -L "https://github.com/openbullet/OpenBullet2/releases/download/2.0.1/OpenBullet2.Web-linux-x64.zip" -O OpenBullet2.zip
           
           # Comprobamos que el archivo ZIP no esté vacío antes de extraer
           if [ ! -s OpenBullet2.zip ]; then
