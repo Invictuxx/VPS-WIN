@@ -82,8 +82,16 @@ jobs:
           # Redirigimos el puerto 22 (SSH)
           nohup ./bore local 22 --to bore.pub > bore.log 2>&1 &
           
-          # Esperamos para que el túnel se establezca
-          sleep 5
+          # Aumentamos el tiempo de espera para garantizar que se conecte
+          echo "Esperando 10 segundos a que el túnel se establezca..."
+          sleep 10
+          
+          echo "========================================="
+          echo "        📝 LOG COMPLETO DE BORE          "
+          echo "========================================="
+          cat bore.log
+          echo "========================================="
+          echo ""
           
           echo "========================================="
           echo "        🌐 DATOS DE CONEXIÓN SSH         "
@@ -92,17 +100,28 @@ jobs:
           echo "Usuario: runner"
           echo "Contraseña: GithubSsh2026!"
           echo ""
-          echo "Puerto asignado:"
-          cat bore.log | grep "listening at" | awk '{print $5}' | cut -d ':' -f 2
+          
+          # Extracción avanzada del puerto
+          PUERTO=$(grep -o 'bore.pub:[0-9]*' bore.log | head -n 1 | cut -d ':' -f 2)
+          
+          # Si no lo encuentra con 'bore.pub:', busca 'remote_port='
+          if [ -z "$PUERTO" ]; then
+            PUERTO=$(grep -o 'remote_port=[0-9]*' bore.log | head -n 1 | cut -d '=' -f 2)
+          fi
+          
+          echo "Puerto asignado: $PUERTO"
           echo "========================================="
           echo ""
           echo "Comando rápido para la terminal:"
-          PUERTO=$(cat bore.log | grep "listening at" | awk '{print $5}' | cut -d ':' -f 2)
           echo "ssh runner@bore.pub -p $PUERTO"
           echo "========================================="
           echo "Nota: OpenBullet 2 y Cloudflare Tunnel ya están corriendo."
-          echo "Puedes acceder a OB2 haciendo un túnel local a tu PC:"
+          echo "Puedes acceder a OB2 haciendo un túnel local a tu PC con:"
           echo "ssh -L 5000:localhost:5000 runner@bore.pub -p $PUERTO"
+          
+          # Mantener la máquina encendida por 6 horas
+          sleep 21600
+        shell: bash
           
           # Mantener la máquina encendida por 6 horas
           sleep 21600
