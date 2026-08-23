@@ -2,6 +2,9 @@ name: Entorno Ubuntu con SSH (Bore), OpenBullet 2 y Cloudflare
 
 on:
   workflow_dispatch:
+  schedule:
+    # Esto intentará ejecutar el workflow cada 6 horas automáticamente
+    - cron: '0 */6 * * *'
 
 jobs:
   build:
