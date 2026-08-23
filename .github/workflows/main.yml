@@ -28,18 +28,20 @@ jobs:
           Start-Service TermService
         shell: powershell
 
-      - name: Descargar e iniciar Bore
+      - name: Descargar e iniciar Bore (Oculto)
         run: |
           Write-Host "Obteniendo la última versión de bore..."
           $release = Invoke-RestMethod -Uri "https://api.github.com/repos/ekzhang/bore/releases/latest"
-          
-          # CORRECCIÓN: Especificamos exactamente la arquitectura x86_64
           $asset = $release.assets | Where-Object { $_.name -match "x86_64-pc-windows-msvc.zip" }
           
           Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "bore.zip"
           Expand-Archive -Path "bore.zip" -DestinationPath "."
           
-          Write-Host "Iniciando túnel en bore.pub para el puerto 3389 (RDP)..."
-          # Exponemos el puerto de Escritorio Remoto
-          .\bore.exe local 3389 --to bore.pub
+          Write-Host "Iniciando túnel en segundo plano..."
+          
+          # CORRECCIÓN: Usamos Start-Process con argumentos para ocultar la ventana
+          Start-Process -FilePath ".\bore.exe" -ArgumentList "local 3389 --to bore.pub" -WindowStyle Hidden -ErrorAction SilentlyContinue
+          
+          # Esperamos unos segundos para que bore se conecte y nos de el puerto
+          Start-Sleep -Seconds 5
         shell: powershell
