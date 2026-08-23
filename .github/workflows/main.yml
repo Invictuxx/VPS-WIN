@@ -1,115 +1,102 @@
-name: Entorno Windows con RDP (Bore)
+name: Entorno Ubuntu con SSH (Bore), OpenBullet 2 y Cloudflare
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Configurar contraseña de Windows
+      - name: Configurar contraseña de Ubuntu y SSH
         run: |
-          # Establecemos la contraseña para el usuario runneradmin
-          $Password = ConvertTo-SecureString "GithubRdp2026!" -AsPlainText -Force
-          Set-LocalUser -Name "runneradmin" -Password $Password
-        shell: powershell
+          # Establecemos la contraseña para el usuario 'runner'
+          echo "runner:GithubSsh2026!" | sudo chpasswd
+          
+          # Habilitamos la autenticación por contraseña en SSH
+          sudo sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config.d/*.conf || true
+          sudo sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config || true
+          sudo sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config || true
+          
+          # Reiniciamos el servicio SSH para aplicar los cambios
+          sudo systemctl restart ssh
+        shell: bash
+
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: 📦 Descargar OpenBullet 2
-        shell: pwsh
-        run: |
-          $destino = "C:\OpenBullet2"
-      
-          New-Item -ItemType Directory -Path $destino -Force | Out-Null
-      
-          $updater = "$destino\ob2-web-updater-win-x64.exe"
-      
-          Invoke-WebRequest `
-            -Uri "https://github.com/openbullet/openbullet2/releases/latest/download/ob2-web-updater-win-x64.exe" `
-            -OutFile $updater
-      
-          Write-Host "Updater descargado en: $updater"
 
-      - name: 📦 Instalar cloudflared
-        shell: pwsh
+      - name: 📦 Instalar e Iniciar OpenBullet 2
         run: |
-          $msi = "$env:TEMP\cloudflared.msi"
-      
-          Invoke-WebRequest `
-            -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.msi" `
-            -OutFile $msi
-      
-          Write-Host "Instalando cloudflared..."
-      
-          $process = Start-Process `
-            -FilePath "msiexec.exe" `
-            -ArgumentList "/i `"$msi`" /qn /norestart" `
-            -Wait `
-            -PassThru
-      
-          if ($process.ExitCode -ne 0) {
-            throw "La instalación de cloudflared falló. ExitCode: $($process.ExitCode)"
-          }
-      
-          Write-Host "cloudflared instalado correctamente."
-      
-          # Recargar PATH para esta sesión
-          $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
-                      [System.Environment]::GetEnvironmentVariable("Path", "User")
-      
-          $cloudflared = Get-Command cloudflared.exe -ErrorAction SilentlyContinue
-      
-          if ($cloudflared) {
-            Write-Host "Encontrado: $($cloudflared.Source)"
-            & $cloudflared.Source --version
-          } else {
-            Write-Host "No se encontró cloudflared en PATH."
-            Write-Host "Buscando el ejecutable..."
-      
-            $found = Get-ChildItem `
-              -Path "C:\Program Files", "C:\Program Files (x86)" `
-              -Filter "cloudflared.exe" `
-              -Recurse `
-              -ErrorAction SilentlyContinue |
-              Select-Object -First 1
-      
-            if (-not $found) {
-              throw "cloudflared.exe no fue encontrado después de la instalación."
-            }
-      
-            Write-Host "Encontrado en: $($found.FullName)"
-            & $found.FullName --version
-          }
-      - name: Habilitar Escritorio Remoto (RDP)
-        run: |
-          # Activar RDP en el registro de Windows
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -value 0
+          DESTINO="$HOME/OpenBullet2"
+          mkdir -p "$DESTINO"
+          cd "$DESTINO"
           
-          # Habilitar la regla en el Firewall de Windows
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          echo "Descargando la última versión de OpenBullet 2..."
+          OB2_URL=$(curl -s https://api.github.com/repos/openbullet/openbullet2/releases/latest | grep "browser_download_url" | grep "OpenBullet2.zip" | cut -d '"' -f 4)
           
-          # Iniciar el servicio de Terminal Server
-          Set-Service -Name TermService -StartupType Automatic
-          Start-Service TermService
-        shell: powershell
+          wget -q $OB2_URL -O OpenBullet2.zip
+          unzip -q OpenBullet2.zip
+          rm OpenBullet2.zip
+          
+          echo "Iniciando OpenBullet 2 en segundo plano..."
+          nohup dotnet OpenBullet2.dll > ob2_console.log 2>&1 &
+          
+          echo "OpenBullet 2 instalado e iniciado en el puerto 5000."
+        shell: bash
 
-      - name: Descargar e iniciar Bore (Oculto)
+      - name: 📦 Instalar e Iniciar Cloudflare Tunnel
         run: |
-          Write-Host "Obteniendo la última versión de bore..."
-          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/ekzhang/bore/releases/latest"
-          $asset = $release.assets | Where-Object { $_.name -match "x86_64-pc-windows-msvc.zip" }
+          echo "Descargando e instalando cloudflared..."
+          wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -O cloudflared.deb
+          sudo dpkg -i cloudflared.deb
           
-          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "bore.zip"
-          Expand-Archive -Path "bore.zip" -DestinationPath "."
+          if command -v cloudflared >/dev/null 2>&1; then
+            echo "cloudflared instalado correctamente. Instalando servicio del túnel..."
+            # Se utiliza el secreto guardado en GitHub Actions para proteger el token
+            sudo cloudflared service install ${{ secrets.CLOUDFLARE_TOKEN }}
+          else
+            echo "Error al instalar cloudflared."
+            exit 1
+          fi
+        shell: bash
+
+      - name: Descargar e iniciar Bore (SSH)
+        run: |
+          echo "Obteniendo la última versión de bore para Linux..."
+          ASSET_URL=$(curl -s https://api.github.com/repos/ekzhang/bore/releases/latest | grep "browser_download_url" | grep "x86_64-unknown-linux-musl.tar.gz" | cut -d '"' -f 4)
           
-          Write-Host "Iniciando túnel en segundo plano..."
+          wget -q $ASSET_URL -O bore.tar.gz
+          tar -xzf bore.tar.gz
+          chmod +x bore
           
-          # CORRECCIÓN: Usamos Start-Process con argumentos para ocultar la ventana
-          Start-Process -FilePath ".\bore.exe" -ArgumentList "local 3389 --to bore.pub" -WindowStyle Hidden -ErrorAction SilentlyContinue
+          echo "Iniciando túnel SSH en segundo plano..."
+          # Redirigimos el puerto 22 (SSH)
+          nohup ./bore local 22 --to bore.pub > bore.log 2>&1 &
           
-          # Esperamos unos segundos para que bore se conecte y nos de el puerto
-          Start-Sleep -Seconds 5
-        shell: powershell
+          # Esperamos para que el túnel se establezca
+          sleep 5
+          
+          echo "========================================="
+          echo "        🌐 DATOS DE CONEXIÓN SSH         "
+          echo "========================================="
+          echo "Host: bore.pub"
+          echo "Usuario: runner"
+          echo "Contraseña: GithubSsh2026!"
+          echo ""
+          echo "Puerto asignado:"
+          cat bore.log | grep "listening at" | awk '{print $5}' | cut -d ':' -f 2
+          echo "========================================="
+          echo ""
+          echo "Comando rápido para la terminal:"
+          PUERTO=$(cat bore.log | grep "listening at" | awk '{print $5}' | cut -d ':' -f 2)
+          echo "ssh runner@bore.pub -p $PUERTO"
+          echo "========================================="
+          echo "Nota: OpenBullet 2 y Cloudflare Tunnel ya están corriendo."
+          echo "Puedes acceder a OB2 haciendo un túnel local a tu PC:"
+          echo "ssh -L 5000:localhost:5000 runner@bore.pub -p $PUERTO"
+          
+          # Mantener la máquina encendida por 6 horas
+          sleep 21600
+        shell: bash
