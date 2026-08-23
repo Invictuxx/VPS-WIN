@@ -34,9 +34,16 @@ jobs:
           cd "$DESTINO"
           
           echo "Descargando la última versión de OpenBullet 2..."
-          OB2_URL=$(curl -s https://api.github.com/repos/openbullet/openbullet2/releases/latest | grep "browser_download_url" | grep "OpenBullet2.zip" | cut -d '"' -f 4)
+          # Usamos el redireccionamiento directo de GitHub (más seguro y sin límites de API)
+          wget -q --show-progress -L "https://github.com/openbullet/OpenBullet2/releases/latest/download/OpenBullet2.zip" -O OpenBullet2.zip
           
-          wget -q $OB2_URL -O OpenBullet2.zip
+          # Comprobamos que el archivo ZIP no esté vacío antes de extraer
+          if [ ! -s OpenBullet2.zip ]; then
+            echo "Error: El archivo OpenBullet2.zip no se descargó correctamente."
+            exit 1
+          fi
+          
+          echo "Descomprimiendo archivos..."
           unzip -q OpenBullet2.zip
           rm OpenBullet2.zip
           
@@ -45,7 +52,7 @@ jobs:
           
           echo "OpenBullet 2 instalado e iniciado en el puerto 5000."
         shell: bash
-
+        
       - name: 📦 Instalar e Iniciar Cloudflare Tunnel
         run: |
           echo "Descargando e instalando cloudflared..."
