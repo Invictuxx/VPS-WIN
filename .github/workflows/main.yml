@@ -122,7 +122,3 @@ jobs:
           # Mantener la máquina encendida por 6 horas
           sleep 21600
         shell: bash
-          
-          # Mantener la máquina encendida por 6 horas
-          sleep 21600
-        shell: bash
