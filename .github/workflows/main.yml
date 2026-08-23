@@ -14,7 +14,75 @@ jobs:
           $Password = ConvertTo-SecureString "GithubRdp2026!" -AsPlainText -Force
           Set-LocalUser -Name "runneradmin" -Password $Password
         shell: powershell
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: 📦 Descargar OpenBullet 2
+        shell: pwsh
+        run: |
+          $destino = "C:\OpenBullet2"
+      
+          New-Item -ItemType Directory -Path $destino -Force | Out-Null
+      
+          $updater = "$destino\ob2-web-updater-win-x64.exe"
+      
+          Invoke-WebRequest `
+            -Uri "https://github.com/openbullet/openbullet2/releases/latest/download/ob2-web-updater-win-x64.exe" `
+            -OutFile $updater
+      
+          Write-Host "Updater descargado en: $updater"
 
+      - name: 📦 Instalar cloudflared
+        shell: pwsh
+        run: |
+          $msi = "$env:TEMP\cloudflared.msi"
+      
+          Invoke-WebRequest `
+            -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.msi" `
+            -OutFile $msi
+      
+          Write-Host "Instalando cloudflared..."
+      
+          $process = Start-Process `
+            -FilePath "msiexec.exe" `
+            -ArgumentList "/i `"$msi`" /qn /norestart" `
+            -Wait `
+            -PassThru
+      
+          if ($process.ExitCode -ne 0) {
+            throw "La instalación de cloudflared falló. ExitCode: $($process.ExitCode)"
+          }
+      
+          Write-Host "cloudflared instalado correctamente."
+      
+          # Recargar PATH para esta sesión
+          $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
+                      [System.Environment]::GetEnvironmentVariable("Path", "User")
+      
+          $cloudflared = Get-Command cloudflared.exe -ErrorAction SilentlyContinue
+      
+          if ($cloudflared) {
+            Write-Host "Encontrado: $($cloudflared.Source)"
+            & $cloudflared.Source --version
+          } else {
+            Write-Host "No se encontró cloudflared en PATH."
+            Write-Host "Buscando el ejecutable..."
+      
+            $found = Get-ChildItem `
+              -Path "C:\Program Files", "C:\Program Files (x86)" `
+              -Filter "cloudflared.exe" `
+              -Recurse `
+              -ErrorAction SilentlyContinue |
+              Select-Object -First 1
+      
+            if (-not $found) {
+              throw "cloudflared.exe no fue encontrado después de la instalación."
+            }
+      
+            Write-Host "Encontrado en: $($found.FullName)"
+            & $found.FullName --version
+          }
       - name: Habilitar Escritorio Remoto (RDP)
         run: |
           # Activar RDP en el registro de Windows
