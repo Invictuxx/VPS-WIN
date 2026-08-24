@@ -86,7 +86,7 @@ jobs:
               "AutoSetRecommendedBots": True,
               "WarnConfigNotSaved": True,
               "WarnDangerousConfig": True,
-              "DefaultAuthor": "Anonymous",
+              "DefaultAuthor": "M A Z E",
               "UpdateChannel": 0,
               "EnableJobLogging": False,
               "LogBufferSize": 30,
