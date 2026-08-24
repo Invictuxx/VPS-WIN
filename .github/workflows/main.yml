@@ -1,57 +1,11 @@
-name: Entorno Ubuntu con SSH (Bore), OpenBullet 2 y Cloudflare
-
-on:
-  workflow_dispatch:
-  schedule:
-    # Esto intentará ejecutar el workflow cada 6 horas automáticamente
-    - cron: '0 */6 * * *'
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Configurar contraseña de Ubuntu y SSH
-        run: |
-          # Establecemos la contraseña para el usuario 'runner'
-          echo "runner:GithubSsh2026!" | sudo chpasswd
-          
-          # Habilitamos la autenticación por contraseña en SSH
-          sudo sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config.d/*.conf || true
-          sudo sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config || true
-          sudo sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config || true
-          
-          # Reiniciamos el servicio SSH para aplicar los cambios
-          sudo systemctl restart ssh
-        shell: bash
-
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: 📦 Instalar OpenBullet 2
-        run: |
-          DESTINO="$HOME/OpenBullet2"
-          mkdir -p "$DESTINO"
-          cd "$DESTINO"
-
-          wget -q --show-progress -L \
-            "https://github.com/openbullet/OpenBullet2/releases/download/2.0.1/OpenBullet2.Web-linux-x64.zip" \
-            -O OpenBullet2.zip
-
-          unzip -q OpenBullet2.zip
-          rm OpenBullet2.zip
-
-          chmod +x ./OpenBullet2.Web
-
-      - name: 🔐 Configurar contraseña de administrador de OpenBullet 2
+- name: 🔐 Configurar contraseña de administrador de OpenBullet 2
         env:
           OB2_ADMIN_PASSWORD: ${{ secrets.OB2_ADMIN_PASSWORD }}
         run: |
           set -e
 
-          CONFIG="$HOME/OpenBullet2/UserData/appsettings.json"
+          # CORRECCIÓN: Se eliminó /UserData de la ruta
+          CONFIG="$HOME/OpenBullet2/appsettings.json"
 
           if [ ! -f "$CONFIG" ]; then
             echo "Error: no se encontró $CONFIG"
@@ -95,79 +49,3 @@ jobs:
           PY
 
           python3 -m json.tool "$CONFIG" > /dev/null
-
-      - name: ▶️ Iniciar OpenBullet 2
-        run: |
-          cd "$HOME/OpenBullet2"
-          nohup ./OpenBullet2.Web > ob2_console.log 2>&1 &
-          echo "OpenBullet 2 iniciado."
-          
-      - name: 📦 Instalar e Iniciar Cloudflare Tunnel
-        run: |
-          echo "Descargando e instalando cloudflared..."
-          wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -O cloudflared.deb
-          sudo dpkg -i cloudflared.deb
-          
-          if command -v cloudflared >/dev/null 2>&1; then
-            echo "cloudflared instalado correctamente. Instalando servicio del túnel..."
-            # Se utiliza el secreto guardado en GitHub Actions para proteger el token
-            sudo cloudflared service install ${{ secrets.CLOUDFLARE_TOKEN }}
-          else
-            echo "Error al instalar cloudflared."
-            exit 1
-          fi
-        shell: bash
-
-      - name: Descargar e iniciar Bore (SSH)
-        run: |
-          echo "Obteniendo la última versión de bore para Linux..."
-          ASSET_URL=$(curl -s https://api.github.com/repos/ekzhang/bore/releases/latest | grep "browser_download_url" | grep "x86_64-unknown-linux-musl.tar.gz" | cut -d '"' -f 4)
-          
-          wget -q $ASSET_URL -O bore.tar.gz
-          tar -xzf bore.tar.gz
-          chmod +x bore
-          
-          echo "Iniciando túnel SSH en segundo plano..."
-          # Redirigimos el puerto 22 (SSH)
-          nohup ./bore local 22 --to bore.pub > bore.log 2>&1 &
-          
-          # Aumentamos el tiempo de espera para garantizar que se conecte
-          echo "Esperando 10 segundos a que el túnel se establezca..."
-          sleep 10
-          
-          echo "========================================="
-          echo "        📝 LOG COMPLETO DE BORE          "
-          echo "========================================="
-          cat bore.log
-          echo "========================================="
-          echo ""
-          
-          echo "========================================="
-          echo "        🌐 DATOS DE CONEXIÓN SSH         "
-          echo "========================================="
-          echo "Host: bore.pub"
-          echo "Usuario: runner"
-          echo "Contraseña: GithubSsh2026!"
-          echo ""
-          
-          # Extracción avanzada del puerto
-          PUERTO=$(grep -o 'bore.pub:[0-9]*' bore.log | head -n 1 | cut -d ':' -f 2)
-          
-          # Si no lo encuentra con 'bore.pub:', busca 'remote_port='
-          if [ -z "$PUERTO" ]; then
-            PUERTO=$(grep -o 'remote_port=[0-9]*' bore.log | head -n 1 | cut -d '=' -f 2)
-          fi
-          
-          echo "Puerto asignado: $PUERTO"
-          echo "========================================="
-          echo ""
-          echo "Comando rápido para la terminal:"
-          echo "ssh runner@bore.pub -p $PUERTO"
-          echo "========================================="
-          echo "Nota: OpenBullet 2 y Cloudflare Tunnel ya están corriendo."
-          echo "Puedes acceder a OB2 haciendo un túnel local a tu PC con:"
-          echo "ssh -L 5000:localhost:5000 runner@bore.pub -p $PUERTO"
-          
-          # Mantener la máquina encendida por 6 horas
-          sleep 21600
-        shell: bash
