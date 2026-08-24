@@ -48,6 +48,7 @@ jobs:
       - name: 🔐 Configurar contraseña de administrador de OpenBullet 2
         env:
           OB2_ADMIN_PASSWORD: ${{ secrets.OB2_ADMIN_PASSWORD }}
+          OB2_ADMIN_USER: ${{ secrets.OB2_ADMIN_USER }}
         run: |
           set -e
 
@@ -64,6 +65,7 @@ jobs:
           import bcrypt
 
           config_path = os.path.expanduser("~/OpenBullet2/UserData/OpenBulletSettings.json")
+          user = os.environ.get("OB2_ADMIN_USER")
           password = os.environ.get("OB2_ADMIN_PASSWORD")
 
           if not password:
