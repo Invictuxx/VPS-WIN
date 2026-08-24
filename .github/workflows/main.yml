@@ -12,9 +12,11 @@ jobs:
 
     steps:
       - name: Configurar contraseña de Ubuntu y SSH
+        env:
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
         run: |
-          # Establecemos la contraseña para el usuario 'runner'
-          echo "runner:GithubSsh2026!" | sudo chpasswd
+          # Establecemos la contraseña para el usuario 'runner' usando Secrets
+          echo "runner:$SSH_PASSWORD" | sudo chpasswd
           
           # Habilitamos la autenticación por contraseña en SSH
           sudo sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config.d/*.conf || true
@@ -70,6 +72,8 @@ jobs:
 
           if not password:
               raise SystemExit("ERROR: OB2_ADMIN_PASSWORD no está configurado.")
+              
+          admin_user = user if user else "admin"
 
           password_hash = bcrypt.hashpw(
               password.encode("utf-8"),
@@ -101,7 +105,7 @@ jobs:
             "SecuritySettings": {
               "AllowSystemWideFileAccess": False,
               "RequireAdminLogin": True,
-              "AdminUsername": "admin",
+              "AdminUsername": admin_user,
               "AdminPasswordHash": password_hash,
               "AdminApiKey": "",
               "JwtKey": "Ye/3yjSeXzEZv5A6iy/RE9Vmsm0PFS8RF1jJI7Ct2PyqcbasHIZa13EEiGgh1gV46Z4R5XZzk3cdb4L256qm8w==",
@@ -192,7 +196,7 @@ jobs:
           echo "========================================="
           echo "Host: bore.pub"
           echo "Usuario: runner"
-          echo "Contraseña: GithubSsh2026!"
+          echo "Contraseña: [Oculta - Definida en Github Secrets]"
           echo ""
           
           PUERTO=$(grep -o 'bore.pub:[0-9]*' bore.log | head -n 1 | cut -d ':' -f 2)
