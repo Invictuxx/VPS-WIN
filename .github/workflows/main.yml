@@ -30,35 +30,78 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: 📦 Instalar e Iniciar OpenBullet 2
+      - name: 📦 Instalar OpenBullet 2
         run: |
           DESTINO="$HOME/OpenBullet2"
           mkdir -p "$DESTINO"
           cd "$DESTINO"
-          
-          echo "Descargando la última versión de OpenBullet 2..."
-          # Usamos el redireccionamiento directo de GitHub (más seguro y sin límites de API)
-          wget -q --show-progress -L "https://github.com/openbullet/OpenBullet2/releases/download/2.0.1/OpenBullet2.Web-linux-x64.zip" -O OpenBullet2.zip
-          
-          # Comprobamos que el archivo ZIP no esté vacío antes de extraer
-          if [ ! -s OpenBullet2.zip ]; then
-            echo "Error: El archivo OpenBullet2.zip no se descargó correctamente."
-            exit 1
-          fi
-          
-          echo "Descomprimiendo archivos..."
+
+          wget -q --show-progress -L \
+            "https://github.com/openbullet/OpenBullet2/releases/download/2.0.1/OpenBullet2.Web-linux-x64.zip" \
+            -O OpenBullet2.zip
+
           unzip -q OpenBullet2.zip
           rm OpenBullet2.zip
-          
-          echo "Dando permisos de ejecución al binario nativo..."
+
           chmod +x ./OpenBullet2.Web
-          
-          echo "Iniciando OpenBullet 2 en segundo plano..."
+
+      - name: 🔐 Configurar contraseña de administrador de OpenBullet 2
+        env:
+          OB2_ADMIN_PASSWORD: ${{ secrets.OB2_ADMIN_PASSWORD }}
+        run: |
+          set -e
+
+          CONFIG="$HOME/OpenBullet2/UserData/appsettings.json"
+
+          if [ ! -f "$CONFIG" ]; then
+            echo "Error: no se encontró $CONFIG"
+            exit 1
+          fi
+
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq python3-bcrypt
+
+          python3 <<'PY'
+          import os
+          import json
+          import bcrypt
+          import shutil
+
+          config_path = os.path.expanduser("~/OpenBullet2/appsettings.json")
+          password = os.environ.get("OB2_ADMIN_PASSWORD")
+
+          if not password:
+              raise SystemExit("ERROR: OB2_ADMIN_PASSWORD no está configurado.")
+
+          shutil.copy2(config_path, config_path + ".bak")
+
+          password_hash = bcrypt.hashpw(
+              password.encode("utf-8"),
+              bcrypt.gensalt(rounds=10)
+          ).decode("utf-8")
+
+          with open(config_path, "r", encoding="utf-8") as f:
+              config = json.load(f)
+
+          security = config.setdefault("SecuritySettings", {})
+          security["RequireAdminLogin"] = True
+          security["AdminPasswordHash"] = password_hash
+
+          with open(config_path, "w", encoding="utf-8") as f:
+              json.dump(config, f, indent=2, ensure_ascii=False)
+              f.write("\n")
+
+          print("Contraseña de administrador configurada correctamente.")
+          PY
+
+          python3 -m json.tool "$CONFIG" > /dev/null
+
+      - name: ▶️ Iniciar OpenBullet 2
+        run: |
+          cd "$HOME/OpenBullet2"
           nohup ./OpenBullet2.Web > ob2_console.log 2>&1 &
+          echo "OpenBullet 2 iniciado."
           
-          echo "OpenBullet 2 instalado e iniciado en el puerto 5000."
-        shell: bash
-        
       - name: 📦 Instalar e Iniciar Cloudflare Tunnel
         run: |
           echo "Descargando e instalando cloudflared..."
