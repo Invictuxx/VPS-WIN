@@ -3,12 +3,13 @@ name: Entorno Ubuntu con SSH (Bore), OpenBullet 2 y Cloudflare
 on:
   workflow_dispatch:
   schedule:
-    # Esto intentará ejecutar el workflow cada 6 horas automáticamente
-    - cron: '0 */6 * * *'
+    # Minuto no saturado (ej. 23) cada 6 horas
+    - cron: '23 */6 * * *'
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 340
 
     steps:
       - name: Configurar contraseña de Ubuntu y SSH
